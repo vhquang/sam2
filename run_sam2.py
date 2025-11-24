@@ -40,9 +40,9 @@ def show_box(box, ax):
     w, h = box[2] - box[0], box[3] - box[1]
     ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor='green', facecolor=(0, 0, 0, 0), lw=2))
 
-def read_image(fp: str):
+
+def read_image(fp: str) -> np.ndarray:  # [H, W, 3]
     img = cv2.cvtColor(cv2.imread(fp), cv2.COLOR_BGR2RGB)
-    import ipdb; ipdb.set_trace()
     return img
 
 
@@ -74,31 +74,27 @@ def main():
     ann_frame_idx = 0  # the frame index we interact with
     ann_obj_id = 1  # give a unique id to each object we interact with (it can be any integers)
 
-    # with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
-    #     state = predictor.init_state(video_path=video_dir)
+    with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
+        state = predictor.init_state(video_path=video_dir)
         
-    #     # masks, _, _ = predictor.predict(<input_prompts>)
+        # masks, _, _ = predictor.predict(<input_prompts>)
 
-    #     _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
-    #         inference_state=state,
-    #         frame_idx=ann_frame_idx,
-    #         obj_id=ann_obj_id,
-    #         points=points,
-    #         labels=labels,
-    #     )
+        _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+            inference_state=state,
+            frame_idx=ann_frame_idx,
+            obj_id=ann_obj_id,
+            points=points,
+            labels=labels,
+        )
     
-    # # show the results on the current (interacted) frame
-    # plt.figure(figsize=(9, 6))
-    # plt.title(f"frame {ann_frame_idx}")
-    # img = cv2.cvtColor(
-    #     cv2.imread(os.path.join(video_dir, frame_names[ann_frame_idx])), 
-    #     cv2.COLOR_BGR2RGB,
-    # )
-    # plt.imshow(img)
-    # show_points(points, labels, plt.gca())
-    # show_mask((out_mask_logits[0] > 0.0).cpu().numpy(), plt.gca(), obj_id=out_obj_ids[0])
+    # show the results on the current (interacted) frame
+    plt.figure(figsize=(9, 6))
+    plt.title(f"frame {ann_frame_idx}")
+    plt.imshow(read_image(os.path.join(video_dir, frame_names[ann_frame_idx])))
+    show_points(points, labels, plt.gca())
+    show_mask((out_mask_logits[0] > 0.0).cpu().numpy(), plt.gca(), obj_id=out_obj_ids[0])
 
-    # plt.show()
+    plt.show()
 
 if __name__ == '__main__':
     main()
