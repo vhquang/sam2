@@ -17,7 +17,7 @@ checkpoint = f"{DIR_NAME}/checkpoints/sam2.1_hiera_large.pt"
 model_cfg = f"/{DIR_NAME}/sam2/configs/sam2.1/sam2.1_hiera_l.yaml"
 
 
-def show_mask(mask, ax, obj_id=None, random_color=False):
+def show_mask(mask, ax, obj_id=None, random_color: bool = False):
     if random_color:
         color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
     else:
@@ -51,7 +51,7 @@ def write_images(fp: str, output_dir: str):
     cmd = f"ffmpeg -i {fp} -q:v 2 -start_number 0 {output_dir}/'%05d.jpg'"
 
 
-def main():
+def try_add_points():
     # predictor = SAM2ImagePredictor(build_sam2(model_cfg, checkpoint))
     predictor = build_sam2_video_predictor(model_cfg, checkpoint)
     
@@ -63,7 +63,7 @@ def main():
     ]
     frame_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
 
-    # take a look the first video frame
+    # # take a look the first video frame
     # frame_idx = 0
     # plt.figure(figsize=(9, 6))
     # plt.title(f"frame {frame_idx}")
@@ -83,35 +83,75 @@ def main():
         
         # masks, _, _ = predictor.predict(<input_prompts>)
 
-        # _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
-        #     inference_state=state,
-        #     frame_idx=ann_frame_idx,
-        #     obj_id=ann_obj_id,
-        #     points=points,
-        #     labels=labels,
-        # )
+        _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+            inference_state=state,
+            frame_idx=ann_frame_idx,
+            obj_id=ann_obj_id,
+            points=points,
+            labels=labels,
+        )
 
-        for frame_idx in range(0, len(frame_names), 20):
-            _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
-                inference_state=state,
-                frame_idx=frame_idx,
-                obj_id=ann_obj_id,
-                points=points,
-                labels=labels,
-            )
+    # Show the results on the current frame
+    plt.figure(figsize=(9, 6))
+    plt.title(f"frame {ann_frame_idx}")
+    plt.imshow(read_image(os.path.join(video_dir, frame_names[ann_frame_idx])))
+    show_points(points, labels, plt.gca())
+    show_mask((out_mask_logits[0] > 0.0).cpu().numpy(), plt.gca(), obj_id=out_obj_ids[0])
+
+    plt.show()
+
+
+def try_propagate():
+    predictor = build_sam2_video_predictor(model_cfg, checkpoint)
     
-            # Show the results on the current frame
-            plt.figure(figsize=(9, 6))
-            plt.title(f"frame {frame_idx}")
-            plt.imshow(read_image(os.path.join(video_dir, frame_names[frame_idx])))
+    video_dir = 'output/sam2/videos_jpg'
+
+    frame_names = [
+        p for p in os.listdir(video_dir)
+        if os.path.splitext(p)[-1] in [".jpg", ".jpeg", ".JPG", ".JPEG"]
+    ]
+    frame_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
+
+    ann_frame_idx = 600  # the frame of the shot
+    body = (710, 470)  # (x, y)
+    ann_obj_id = 1
+    points = np.array([body], dtype=np.float32)
+    labels = np.array([1], np.int32)
+
+    video_segments = {}
+
+    with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
+        state = predictor.init_state(video_path=video_dir)
+        
+        _, _, _ = predictor.add_new_points_or_box(
+            inference_state=state,
+            frame_idx=ann_frame_idx,
+            obj_id=ann_obj_id,
+            points=points,
+            labels=labels,
+        )
+
+        for out_frame_idx, out_obj_ids, out_mask_logits in predictor.propagate_in_video(state):
+            video_segments[out_frame_idx] = {
+                out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
+                for i, out_obj_id in enumerate(out_obj_ids)
+            }
+
+        predictor.reset_state(state)
+    
+    for frame_idx in video_segments:
+        plt.figure(figsize=(9, 6))
+        plt.title(f"frame {frame_idx}")
+        plt.imshow(read_image(os.path.join(video_dir, frame_names[frame_idx])))
+        
+        for obj_id, mask in video_segments[frame_idx].items():
             show_points(points, labels, plt.gca())
-            show_mask((out_mask_logits[0] > 0.0).cpu().numpy(), plt.gca(), obj_id=out_obj_ids[0])
+            show_mask((mask > 0.0).cpu().numpy(), plt.gca(), obj_id=obj_id)
 
-            # plt.show()
+        sam_output_dir = 'output/sam2/results'
+        plt.savefig(f'{sam_output_dir}/frame_{frame_idx}.png')
+        plt.close()
 
-            sam_output_dir = 'output/sam2/results'
-            plt.savefig(f'{sam_output_dir}/frame_{frame_idx}.png')
-            plt.close()
 
 if __name__ == '__main__':
-    main()
+    try_add_points()
