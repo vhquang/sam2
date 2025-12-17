@@ -47,11 +47,15 @@ def read_image(fp: str) -> np.ndarray:  # [H, W, 3]
     return img
 
 
+def write_images(fp: str, output_dir: str):
+    cmd = f"ffmpeg -i {fp} -q:v 2 -start_number 0 {output_dir}/'%05d.jpg'"
+
+
 def main():
     # predictor = SAM2ImagePredictor(build_sam2(model_cfg, checkpoint))
     predictor = build_sam2_video_predictor(model_cfg, checkpoint)
     
-    video_dir = 'output/videos_jpg'
+    video_dir = 'output/sam2/videos_jpg'
 
     frame_names = [
         p for p in os.listdir(video_dir)
@@ -66,10 +70,9 @@ def main():
     # plt.imshow(Image.open(os.path.join(video_dir, frame_names[frame_idx])))
     # plt.show()
 
-    left_leg_xy = (667, 564)
-    # left_leg_xy = (166, 116)  # after scale
+    body = (710, 470)  # (x, y)
 
-    points = np.array([left_leg_xy], dtype=np.float32)
+    points = np.array([body], dtype=np.float32)
     # for labels, `1` means positive click and `0` means negative click
     labels = np.array([1], np.int32)
     ann_frame_idx = 0  # the frame index we interact with
@@ -80,22 +83,35 @@ def main():
         
         # masks, _, _ = predictor.predict(<input_prompts>)
 
-        _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
-            inference_state=state,
-            frame_idx=ann_frame_idx,
-            obj_id=ann_obj_id,
-            points=points,
-            labels=labels,
-        )
-    
-    # # show the results on the current (interacted) frame
-    # plt.figure(figsize=(9, 6))
-    # plt.title(f"frame {ann_frame_idx}")
-    # plt.imshow(read_image(os.path.join(video_dir, frame_names[ann_frame_idx])))
-    # show_points(points, labels, plt.gca())
-    # show_mask((out_mask_logits[0] > 0.0).cpu().numpy(), plt.gca(), obj_id=out_obj_ids[0])
+        # _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+        #     inference_state=state,
+        #     frame_idx=ann_frame_idx,
+        #     obj_id=ann_obj_id,
+        #     points=points,
+        #     labels=labels,
+        # )
 
-    # plt.show()
+        for frame_idx in range(0, len(frame_names), 20):
+            _, out_obj_ids, out_mask_logits = predictor.add_new_points_or_box(
+                inference_state=state,
+                frame_idx=frame_idx,
+                obj_id=ann_obj_id,
+                points=points,
+                labels=labels,
+            )
+    
+            # Show the results on the current frame
+            plt.figure(figsize=(9, 6))
+            plt.title(f"frame {frame_idx}")
+            plt.imshow(read_image(os.path.join(video_dir, frame_names[frame_idx])))
+            show_points(points, labels, plt.gca())
+            show_mask((out_mask_logits[0] > 0.0).cpu().numpy(), plt.gca(), obj_id=out_obj_ids[0])
+
+            # plt.show()
+
+            sam_output_dir = 'output/sam2/results'
+            plt.savefig(f'{sam_output_dir}/frame_{frame_idx}.png')
+            plt.close()
 
 if __name__ == '__main__':
     main()
