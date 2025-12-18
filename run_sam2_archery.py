@@ -47,7 +47,7 @@ def read_image(fp: str) -> np.ndarray:  # [H, W, 3]
     return img
 
 
-def write_images(fp: str, output_dir: str):
+def video_to_jpg(fp: str, output_dir: str):
     cmd = f"ffmpeg -i {fp} -q:v 2 -start_number 0 {output_dir}/'%05d.jpg'"
 
 
@@ -146,7 +146,7 @@ def try_propagate():
         
         for obj_id, mask in video_segments[frame_idx].items():
             show_points(points, labels, plt.gca())
-            show_mask((mask > 0.0).cpu().numpy(), plt.gca(), obj_id=obj_id)
+            show_mask(mask, plt.gca(), obj_id=obj_id)
 
         sam_output_dir = 'output/sam2/results'
         plt.savefig(f'{sam_output_dir}/frame_{frame_idx}.png')
@@ -154,4 +154,6 @@ def try_propagate():
 
 
 if __name__ == '__main__':
-    try_add_points()
+    # try_add_points()
+    try_propagate()
+    pass
